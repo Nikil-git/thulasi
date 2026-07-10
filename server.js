@@ -53,17 +53,27 @@ function cleanNumber(raw) {
 async function startApp() {
     console.log('🚀 Starting application...');
 
-    // SIMPLIFIED CLIENT - Let Puppeteer handle Chrome automatically
-    // Do not specify executablePath
+    // CRITICAL FIX: Point to the Chrome version that was actually installed
+    const CHROME_PATH = '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome';
+    
+    console.log('🔍 Looking for Chrome at:', CHROME_PATH);
+    const chromeExists = fs.existsSync(CHROME_PATH);
+    console.log('Chrome exists?', chromeExists);
+
     const client = new Client({
         authStrategy: new LocalAuth({ dataPath: './session' }),
         puppeteer: {
             headless: true,
+            executablePath: chromeExists ? CHROME_PATH : undefined,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-accelerated-2d-canvas',
+                '--disable-accelerated-jpeg-decoding',
+                '--disable-accelerated-mjpeg-decode',
+                '--disable-accelerated-video-decode'
             ]
         }
     });
