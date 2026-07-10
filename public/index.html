@@ -39,6 +39,45 @@
             text-align: center;
             margin-bottom: 18px;
         }
+        .status {
+            background: #14141e;
+            border-radius: 14px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255,255,255,0.04);
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .status .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .status .dot.on { background: #25D366; }
+        .status .dot.off { background: #ff4444; }
+        .status .dot.qr { background: #f59e0b; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .qr-container {
+            background: white;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 16px;
+            display: none;
+            text-align: center;
+        }
+        .qr-container.active { display: block; }
+        .qr-container img { max-width: 150px; width: 100%; height: auto; border-radius: 8px; }
+        .qr-container .qr-label {
+            margin-top: 6px;
+            color: #666;
+            font-size: 0.7rem;
+        }
         .tab-bar {
             display: flex;
             gap: 4px;
@@ -87,10 +126,56 @@
             transition: 0.2s;
         }
         .field textarea:focus { border-color: #25D366; background: #12121c; }
+        .field input {
+            width: 100%;
+            padding: 14px 16px;
+            background: #0e0e16;
+            border: 1.5px solid #1e1e2a;
+            border-radius: 14px;
+            color: #f0f0f0;
+            font-size: 1rem;
+            font-family: inherit;
+            outline: none;
+            transition: 0.2s;
+        }
+        .field input:focus { border-color: #25D366; background: #12121c; }
         .field .hint {
             font-size: 0.65rem;
             color: #4a4a5a;
             margin-top: 4px;
+        }
+        .file-wrap {
+            background: #0e0e16;
+            border: 1.5px dashed #1e1e2a;
+            border-radius: 14px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .file-wrap input[type="file"] {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #f0f0f0;
+            font-size: 0.85rem;
+            padding: 0;
+            min-width: 100px;
+        }
+        .file-wrap .file-name {
+            font-size: 0.7rem;
+            color: #25D366;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100px;
+        }
+        .file-list {
+            margin-top: 4px;
+            font-size: 0.65rem;
+            color: #88889a;
+            word-break: break-all;
         }
         .btn {
             width: 100%;
@@ -105,13 +190,19 @@
             margin-top: 8px;
         }
         .btn:active { transform: scale(0.97); }
-        .btn-whatsapp {
+        .btn-primary {
             background: #25D366;
             color: #0a0a12;
-            font-size: 1.1rem;
-            box-shadow: 0 8px 30px rgba(37, 211, 102, 0.15);
         }
-        .btn-whatsapp:active { background: #1ebe5c; }
+        .btn-primary:active { background: #1ebe5c; }
+        .btn-secondary { background: #3b82f6; color: #fff; }
+        .btn-secondary:active { background: #2563eb; }
+        .btn-ghost {
+            background: transparent;
+            color: #88889a;
+            border: 1px solid #2a2a3a;
+        }
+        .btn-ghost:active { background: #1a1a28; }
         .btn-row { display: flex; gap: 8px; }
         .btn-row .btn { flex: 1; margin-top: 0; }
         .result {
@@ -215,6 +306,39 @@
             color: #4a4a5a;
             font-size: 0.7rem;
         }
+        .scheduled-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: #12121c;
+            border-radius: 10px;
+            margin-bottom: 3px;
+            font-size: 0.7rem;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .scheduled-item .info { flex: 1; min-width: 70px; }
+        .scheduled-item .info div { font-size: 0.6rem; color: #888; }
+        .scheduled-item .status-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.55rem;
+            font-weight: 600;
+        }
+        .scheduled-item .status-badge.pending { background: #f59e0b; color: #0a0a12; }
+        .scheduled-item .status-badge.completed { background: #25D366; color: #0a0a12; }
+        .scheduled-item .status-badge.failed { background: #dc2626; color: #fff; }
+        .scheduled-item .delete-btn {
+            background: #dc2626;
+            border: none;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.55rem;
+            cursor: pointer;
+        }
+        .scheduled-item .delete-btn:active { background: #b91c1c; }
         .modal {
             display: none;
             position: fixed;
@@ -264,12 +388,6 @@
             cursor: pointer;
         }
         .modal-content .modal-close:active { background: #1ebe5c; }
-        .btn-ghost {
-            background: transparent;
-            color: #88889a;
-            border: 1px solid #2a2a3a;
-        }
-        .btn-ghost:active { background: #1a1a28; }
         @media (max-width: 480px) {
             .app { padding: 18px 14px 22px; border-radius: 22px; }
             h1 { font-size: 1.4rem; }
@@ -293,6 +411,16 @@
     <h1>Thulasi Travels</h1>
     <div class="sub">WhatsApp Messaging</div>
 
+    <div class="status" id="statusBar">
+        <span class="dot off" id="statusDot"></span>
+        <span id="statusText">Connecting...</span>
+    </div>
+
+    <div class="qr-container" id="qrContainer">
+        <img id="qrImage" src="" alt="QR Code">
+        <div class="qr-label">Scan with WhatsApp</div>
+    </div>
+
     <div class="tab-bar" id="tabBar">
         <button class="active" data-tab="send">Send</button>
         <button data-tab="schedule">Schedule</button>
@@ -309,7 +437,7 @@
 
         <div class="field">
             <label>Message</label>
-            <textarea id="sendMessage" placeholder="Type your message here...">Hello from Thulasi Travels</textarea>
+            <textarea id="sendMessage" placeholder="Type your message...">Hello from Thulasi Travels</textarea>
         </div>
 
         <div class="field">
@@ -321,7 +449,7 @@
             <div class="file-list" id="sendFileList"></div>
         </div>
 
-        <button class="btn btn-whatsapp" id="sendNowBtn">Send Now</button>
+        <button class="btn btn-primary" id="sendNowBtn">Send Now</button>
         <div class="result" id="sendResult"></div>
     </div>
 
@@ -335,7 +463,7 @@
 
         <div class="field">
             <label>Message</label>
-            <textarea id="scheduleMessage" placeholder="Type your message here..."></textarea>
+            <textarea id="scheduleMessage" placeholder="Type your message..."></textarea>
         </div>
 
         <div class="field">
@@ -352,12 +480,12 @@
             <input type="datetime-local" id="scheduleTime">
         </div>
 
-        <button class="btn btn-secondary" id="scheduleBtn">Schedule Message</button>
+        <button class="btn btn-secondary" id="scheduleBtn">Schedule</button>
         <div class="result" id="scheduleResult"></div>
 
         <div class="history-section">
             <div class="history-header">
-                <span class="title">Scheduled Messages</span>
+                <span class="title">Scheduled</span>
                 <button class="clear-btn" id="refreshScheduledBtn">Refresh</button>
             </div>
             <div class="history-list" id="scheduledList">
@@ -373,9 +501,9 @@
             <button class="clear-btn" id="clearHistoryBtn">Clear All</button>
         </div>
         <div class="history-list" id="historyList">
-            <div class="history-empty">No messages sent yet</div>
+            <div class="history-empty">No messages sent</div>
         </div>
-        <button class="btn btn-ghost" id="exportHistoryBtn" style="margin-top:10px;">Export History</button>
+        <button class="btn btn-ghost" id="exportHistoryBtn" style="margin-top:10px;">Export CSV</button>
     </div>
 </div>
 
@@ -393,6 +521,12 @@
     var sendFiles = [];
     var scheduleFiles = [];
 
+    var statusText = document.getElementById('statusText');
+    var statusDot = document.getElementById('statusDot');
+    var qrContainer = document.getElementById('qrContainer');
+    var qrImage = document.getElementById('qrImage');
+
+    // Tabs
     document.querySelectorAll('#tabBar button').forEach(function(btn) {
         btn.addEventListener('click', function() {
             document.querySelectorAll('#tabBar button').forEach(function(b) { b.classList.remove('active'); });
@@ -406,6 +540,7 @@
         });
     });
 
+    // File handling
     document.getElementById('sendMediaFile').addEventListener('change', function(e) {
         sendFiles = Array.from(this.files);
         var preview = document.getElementById('sendFilePreview');
@@ -451,6 +586,31 @@
     function getScheduleNumbers() {
         var val = document.getElementById('scheduleNumbers').value;
         return val.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+    }
+
+    // Status
+    async function fetchStatus() {
+        try {
+            var res = await fetch('/status');
+            var data = await res.json();
+            if (data.ready) {
+                statusText.textContent = 'WhatsApp Connected - Ready';
+                statusDot.className = 'dot on';
+                qrContainer.classList.remove('active');
+            } else if (data.qr) {
+                statusText.textContent = 'Scan QR Code';
+                statusDot.className = 'dot qr';
+                qrContainer.classList.add('active');
+                qrImage.src = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(data.qr);
+            } else {
+                statusText.textContent = 'Initialising...';
+                statusDot.className = 'dot off';
+                qrContainer.classList.remove('active');
+            }
+        } catch (e) {
+            statusText.textContent = 'Server error - refresh';
+            statusDot.className = 'dot off';
+        }
     }
 
     // Send Now
@@ -573,6 +733,7 @@
         } catch (e) {}
     }
 
+    // History
     function loadHistory() {
         try {
             var stored = localStorage.getItem('thulasi_sent_history');
@@ -590,7 +751,7 @@
     function renderHistory() {
         var list = document.getElementById('historyList');
         if (sentHistory.length === 0) {
-            list.innerHTML = '<div class="history-empty">No messages sent yet</div>';
+            list.innerHTML = '<div class="history-empty">No messages sent</div>';
             return;
         }
         var html = '';
@@ -665,8 +826,11 @@
         showResult('sendResult', 'History exported as CSV.', 'success');
     });
 
+    // Init
     loadHistory();
     document.getElementById('refreshScheduledBtn').addEventListener('click', loadScheduledJobs);
+    fetchStatus();
+    setInterval(fetchStatus, 5000);
 </script>
 </body>
 </html>
