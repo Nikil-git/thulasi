@@ -4,8 +4,8 @@ const qrcode = require('qrcode-terminal');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer'); // ✅ ADD THIS IMPORT
-const schedule = require('node-schedule'); // ✅ ADD THIS IMPORT
+const puppeteer = require('puppeteer');
+const schedule = require('node-schedule');
 
 // Download Chrome if missing
 async function ensureChrome() {
@@ -26,7 +26,7 @@ async function ensureChrome() {
     }
 }
 
-// Initialize Express app first
+// Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -69,73 +69,109 @@ function cleanNumber(raw) {
     return null;
 }
 
-// Ensure Chrome exists before initializing client
-(async () => {
-    await ensureChrome();
-    initializeClient();
-})();
-
-function initializeClient() {
-    // IMPORTANT: Use the exact path from the build log
-    const CHROME_PATH = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
+// Function to find Chrome
+function findChrome() {
+    const possiblePaths = [
+        '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome',
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium'
+    ];
     
-    console.log('Looking for Chrome at:', CHROME_PATH);
-    console.log('Chrome exists?', fs.existsSync(CHROME_PATH));
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            console.log('Found Chrome at:', p);
+            return p;
+        }
+    }
+    console.log('No Chrome found in known paths, will use Puppeteer default');
+    return undefined;
+}
 
-    // Try alternate path if the first one doesn't exist
-    let executablePath = CHROME_PATH;
-    if (!fs.existsSync(CHROME_PATH)) {
-        // Try the default Puppeteer installation path
-        const altPath = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
-        if (fs.existsSync(altPath)) {
-            executablePath = altPath;
-        } else {
-            // Let Puppeteer find it automatically
-            console.log('Chrome not found at specified path, will use default');
-            executablePath = undefined;
+// Start the app
+async function startApp() {
+    console.log('Starting application...');
+    
+    // Try to find Chrome first
+    const chromePath = findChrome();
+    
+    if (!chromePath) {
+        console.log('Chrome not found, attempting to download...');
+        await ensureChrome();
+        // Try to find it again after download
+        const newChromePath = findChrome();
+        if (!newChromePath) {
+            console.warn('Could not find Chrome even after download. Using default.');
         }
     }
 
+    console.log('Initializing WhatsApp client...');
+    
     const client = new Client({
         authStrategy: new LocalAuth({ dataPath: './session' }),
         puppeteer: {
             headless: true,
-            executablePath: executablePath,
+            executablePath: findChrome() || undefined,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-accelerated-2d-canvas',
+                '--disable-accelerated-jpeg-decoding',
+                '--disable-accelerated-mjpeg-decode',
+                '--disable-accelerated-video-decode'
             ]
         }
     });
 
     client.on('qr', (qr) => {
         lastQR = qr;
-        console.log('QR Code generated.');
+        console.log('QR Code generated. Scan with WhatsApp!');
         qrcode.generate(qr, { small: true });
     });
 
     client.on('ready', () => {
         clientReady = true;
         lastQR = null;
-        console.log('WhatsApp client ready!');
+        console.log('✅ WhatsApp client ready!');
         loadScheduledJobs();
+        console.log(`📋 ${scheduledJobs.length} scheduled jobs loaded`);
     });
 
-    client.on('auth_failure', () => console.error('Auth failed'));
-    client.on('disconnected', () => {
+    client.on('auth_failure', (msg) => {
+        console.error('❌ Auth failed:', msg);
+    });
+    
+    client.on('disconnected', (reason) => {
         clientReady = false;
-        console.log('Disconnected, reconnecting in 5s...');
-        setTimeout(() => client.initialize(), 5000);
+        console.log('Disconnected:', reason);
+        console.log('Reconnecting in 5s...');
+        setTimeout(() => {
+            console.log('Attempting to reconnect...');
+            client.initialize();
+        }, 5000);
     });
 
-    client.initialize();
+    await client.initialize();
 
     // ----- ROUTES -----
     
+    app.get('/', (req, res) => {
+        res.json({ 
+            status: 'WhatsApp Bot Running',
+            ready: clientReady,
+            version: '1.0.0'
+        });
+    });
+
     app.get('/status', (req, res) => {
-        res.json({ ready: clientReady, qr: lastQR });
+        res.json({ 
+            ready: clientReady, 
+            qr: lastQR,
+            scheduledJobs: scheduledJobs.length 
+        });
     });
 
     app.get('/scheduled', (req, res) => {
@@ -145,16 +181,19 @@ function initializeClient() {
     app.delete('/scheduled/:id', (req, res) => {
         const id = req.params.id;
         const index = scheduledJobs.findIndex(j => j.id === id);
-        if (index === -1) return res.status(404).json({ error: 'Job not found' });
+        if (index === -1) {
+            return res.status(404).json({ error: 'Job not found' });
+        }
         scheduledJobs.splice(index, 1);
         saveScheduledJobs();
-        res.json({ success: true });
+        res.json({ success: true, message: 'Job deleted' });
     });
 
     app.post('/send-bulk', upload.array('media', 10), async (req, res) => {
         try {
             let numbers, message;
             let mediaFiles = [];
+            
             if (req.files && req.files.length > 0) {
                 mediaFiles = req.files.map(f => f.path);
                 numbers = JSON.parse(req.body.numbers);
@@ -163,28 +202,36 @@ function initializeClient() {
                 numbers = req.body.numbers;
                 message = req.body.message;
             }
+            
             if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
                 return res.status(400).json({ error: 'No numbers provided' });
             }
+            
             if (!message && mediaFiles.length === 0) {
                 return res.status(400).json({ error: 'Missing message or media' });
             }
+            
             if (!clientReady) {
                 return res.status(503).json({ error: 'WhatsApp not ready' });
             }
+            
             const validNumbers = [];
             const invalidNumbers = [];
+            
             for (const raw of numbers) {
                 const cleaned = cleanNumber(raw);
                 if (cleaned) validNumbers.push(cleaned + '@c.us');
                 else invalidNumbers.push(raw);
             }
+            
             if (validNumbers.length === 0) {
                 return res.status(400).json({ error: 'No valid numbers', invalid: invalidNumbers });
             }
+            
             let sent = 0, failed = 0, idx = 0;
             const errors = [];
             const mediaObjs = [];
+            
             for (const filePath of mediaFiles) {
                 if (fs.existsSync(filePath)) {
                     try {
@@ -194,6 +241,7 @@ function initializeClient() {
                     }
                 }
             }
+            
             async function worker() {
                 while (idx < validNumbers.length) {
                     const i = idx++;
@@ -213,17 +261,25 @@ function initializeClient() {
                     }
                 }
             }
+            
             const concurrency = req.body.concurrency || 20;
             const workers = Array(Math.min(concurrency, validNumbers.length)).fill().map(() => worker());
             await Promise.all(workers);
-            for (const f of mediaFiles) if (fs.existsSync(f)) fs.unlinkSync(f);
+            
+            for (const f of mediaFiles) {
+                if (fs.existsSync(f)) fs.unlinkSync(f);
+            }
+            
             res.json({
+                success: true,
                 total: validNumbers.length,
-                sent, failed,
+                sent, 
+                failed,
                 invalid: invalidNumbers,
                 errors: errors.slice(0, 20)
             });
         } catch (err) {
+            console.error('Error in send-bulk:', err);
             res.status(500).json({ error: err.message });
         }
     });
@@ -232,6 +288,7 @@ function initializeClient() {
         try {
             let numbers, message, scheduledTime;
             let mediaFiles = [];
+            
             if (req.files && req.files.length > 0) {
                 mediaFiles = req.files.map(f => f.path);
                 numbers = JSON.parse(req.body.numbers);
@@ -242,23 +299,29 @@ function initializeClient() {
                 message = req.body.message;
                 scheduledTime = req.body.scheduledTime;
             }
+            
             if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
                 return res.status(400).json({ error: 'Missing numbers' });
             }
+            
             if (!message && mediaFiles.length === 0) {
                 return res.status(400).json({ error: 'Missing message or media' });
             }
+            
             if (!scheduledTime) {
                 return res.status(400).json({ error: 'Missing scheduled time' });
             }
+            
             const validNumbers = [];
             for (const raw of numbers) {
                 const cleaned = cleanNumber(raw);
                 if (cleaned) validNumbers.push(cleaned);
             }
+            
             if (validNumbers.length === 0) {
                 return res.status(400).json({ error: 'No valid numbers' });
             }
+            
             const job = {
                 id: Date.now().toString(),
                 numbers: validNumbers,
@@ -268,13 +331,19 @@ function initializeClient() {
                 status: 'pending',
                 createdAt: new Date().toISOString()
             };
+            
             scheduledJobs.push(job);
             saveScheduledJobs();
+            
             const date = new Date(scheduledTime);
             if (date > new Date()) {
                 schedule.scheduleJob(date, async function() {
                     console.log('Executing scheduled job:', job.id);
-                    if (!clientReady) return;
+                    if (!clientReady) {
+                        console.log('Client not ready, skipping job');
+                        return;
+                    }
+                    
                     let sent = 0, failed = 0;
                     for (const number of job.numbers) {
                         try {
@@ -295,20 +364,40 @@ function initializeClient() {
                             console.error('Failed to send to', number, err.message);
                         }
                     }
+                    
                     job.status = 'completed';
                     job.sent = sent;
                     job.failed = failed;
                     job.completedAt = new Date().toISOString();
                     saveScheduledJobs();
+                    console.log(`Job ${job.id} completed: ${sent} sent, ${failed} failed`);
                 });
+                console.log(`📅 Scheduled job ${job.id} for ${date.toISOString()}`);
+            } else {
+                job.status = 'invalid-time';
+                saveScheduledJobs();
+                console.log(`Job ${job.id} has invalid time: ${date.toISOString()}`);
             }
-            res.json({ success: true, jobId: job.id });
+            
+            res.json({ 
+                success: true, 
+                jobId: job.id,
+                scheduledTime: date.toISOString()
+            });
         } catch (err) {
+            console.error('Error in schedule:', err);
             res.status(500).json({ error: err.message });
         }
     });
 
     app.listen(PORT, '0.0.0.0', () => {
-        console.log('Server running on port', PORT);
+        console.log(`🚀 Server running on port ${PORT}`);
+        console.log(`🌐 Status endpoint: http://localhost:${PORT}/status`);
     });
 }
+
+// Start the application
+startApp().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+});
