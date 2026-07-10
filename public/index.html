@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Thulasi Travels</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #06060b;
+            color: #e8e8e8;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .app {
+            width: 100%;
+            max-width: 480px;
+            background: #111118;
+            border-radius: 28px;
+            padding: 24px 20px 28px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #25D366;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+        .sub {
+            font-size: 0.8rem;
+            color: #66667a;
+            text-align: center;
+            margin-bottom: 18px;
+        }
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .tab-bar button {
+            flex: 1;
+            min-width: 60px;
+            padding: 10px 4px;
+            background: #14141e;
+            border: 1px solid #1e1e2a;
+            border-radius: 12px;
+            color: #88889a;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            text-align: center;
+            touch-action: manipulation;
+        }
+        .tab-bar button.active { background: #25D366; color: #0a0a12; border-color: #25D366; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .field { margin-bottom: 16px; }
+        .field label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #77778a;
+            margin-bottom: 4px;
+        }
+        .field textarea {
+            width: 100%;
+            padding: 14px 16px;
+            background: #0e0e16;
+            border: 1.5px solid #1e1e2a;
+            border-radius: 14px;
+            color: #f0f0f0;
+            font-size: 1rem;
+            font-family: inherit;
+            outline: none;
+            resize: vertical;
+            min-height: 80px;
+            transition: 0.2s;
+        }
+        .field textarea:focus { border-color: #25D366; background: #12121c; }
+        .field .hint {
+            font-size: 0.65rem;
+            color: #4a4a5a;
+            margin-top: 4px;
+        }
+        .btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 16px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.15s;
+            touch-action: manipulation;
+            margin-top: 8px;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-whatsapp {
+            background: #25D366;
+            color: #0a0a12;
+            font-size: 1.1rem;
+            box-shadow: 0 8px 30px rgba(37, 211, 102, 0.15);
+        }
+        .btn-whatsapp:active { background: #1ebe5c; }
+        .btn-row { display: flex; gap: 8px; }
+        .btn-row .btn { flex: 1; margin-top: 0; }
+        .result {
+            margin-top: 12px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            text-align: center;
+            font-size: 0.8rem;
+            display: none;
+        }
+        .result.success { background: #0d2a1a; color: #4ade80; }
+        .result.error { background: #2a0d0d; color: #f87171; }
+        .result.loading { background: #1a2a1a; color: #fbbf24; }
+        .history-section {
+            margin-top: 16px;
+            border-top: 1px solid #14141e;
+            padding-top: 14px;
+        }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .history-header .title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #77778a;
+        }
+        .history-header .clear-btn {
+            background: none;
+            border: none;
+            color: #ff4444;
+            font-size: 0.6rem;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 8px;
+        }
+        .history-header .clear-btn:active { background: #1a0d0d; }
+        .history-list {
+            max-height: 250px;
+            overflow-y: auto;
+            background: #0a0a12;
+            border-radius: 12px;
+            padding: 4px;
+        }
+        .history-item {
+            background: #12121c;
+            border-radius: 10px;
+            margin-bottom: 4px;
+            padding: 8px 10px;
+        }
+        .history-item .top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .history-item .num { color: #25D366; font-weight: 600; font-size: 0.7rem; }
+        .history-item .date { color: #4a4a5a; font-size: 0.55rem; }
+        .history-item .resend-btn {
+            background: #25D366;
+            border: none;
+            color: #0a0a12;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .history-item .resend-btn:active { background: #1ebe5c; }
+        .history-item .message-preview {
+            font-size: 0.7rem;
+            color: #aaa;
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid #1a1a28;
+            word-break: break-word;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .history-item .view-full-btn {
+            background: none;
+            border: none;
+            color: #25D366;
+            font-size: 0.6rem;
+            cursor: pointer;
+            margin-top: 2px;
+            padding: 2px 6px;
+        }
+        .history-item .view-full-btn:active { color: #1ebe5c; }
+        .history-empty {
+            text-align: center;
+            padding: 12px;
+            color: #4a4a5a;
+            font-size: 0.7rem;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            padding: 20px;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #1a1a28;
+            border-radius: 20px;
+            padding: 24px 20px;
+            max-width: 420px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-content h3 {
+            color: #25D366;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        .modal-content .modal-message {
+            background: #0e0e16;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            color: #e8e8e8;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin-bottom: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .modal-content .modal-close {
+            background: #25D366;
+            border: none;
+            color: #0a0a12;
+            padding: 10px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            width: 100%;
+            cursor: pointer;
+        }
+        .modal-content .modal-close:active { background: #1ebe5c; }
+        .btn-ghost {
+            background: transparent;
+            color: #88889a;
+            border: 1px solid #2a2a3a;
+        }
+        .btn-ghost:active { background: #1a1a28; }
+        @media (max-width: 480px) {
+            .app { padding: 18px 14px 22px; border-radius: 22px; }
+            h1 { font-size: 1.4rem; }
+            .btn { padding: 14px; font-size: 0.95rem; }
+            .tab-bar button { font-size: 0.6rem; padding: 8px 4px; min-width: 45px; }
+            .field textarea { padding: 12px 14px; font-size: 0.95rem; min-height: 60px; }
+            .btn-row { flex-direction: column; gap: 4px; }
+            .btn-row .btn { margin-top: 4px; }
+        }
+        @media (max-width: 380px) {
+            .app { padding: 14px 10px 18px; border-radius: 18px; }
+            .tab-bar button { font-size: 0.5rem; padding: 6px 2px; min-width: 35px; }
+        }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1e1e2a; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <h1>Thulasi Travels</h1>
+    <div class="sub">WhatsApp Messaging</div>
+
+    <div class="tab-bar" id="tabBar">
+        <button class="active" data-tab="send">Send</button>
+        <button data-tab="schedule">Schedule</button>
+        <button data-tab="history">History</button>
+    </div>
+
+    <!-- Send Tab -->
+    <div class="tab-content active" id="tab-send">
+        <div class="field">
+            <label>Phone Numbers</label>
+            <textarea id="sendNumbers" placeholder="9876543210&#10;9876543211"></textarea>
+            <div class="hint">One number per line</div>
+        </div>
+
+        <div class="field">
+            <label>Message</label>
+            <textarea id="sendMessage" placeholder="Type your message here...">Hello from Thulasi Travels</textarea>
+        </div>
+
+        <div class="field">
+            <label>Attach Media</label>
+            <div class="file-wrap">
+                <input type="file" id="sendMediaFile" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple>
+                <span class="file-name" id="sendFilePreview">No files</span>
+            </div>
+            <div class="file-list" id="sendFileList"></div>
+        </div>
+
+        <button class="btn btn-whatsapp" id="sendNowBtn">Send Now</button>
+        <div class="result" id="sendResult"></div>
+    </div>
+
+    <!-- Schedule Tab -->
+    <div class="tab-content" id="tab-schedule">
+        <div class="field">
+            <label>Phone Numbers</label>
+            <textarea id="scheduleNumbers" placeholder="9876543210&#10;9876543211"></textarea>
+            <div class="hint">One number per line</div>
+        </div>
+
+        <div class="field">
+            <label>Message</label>
+            <textarea id="scheduleMessage" placeholder="Type your message here..."></textarea>
+        </div>
+
+        <div class="field">
+            <label>Attach Media</label>
+            <div class="file-wrap">
+                <input type="file" id="scheduleMediaFile" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple>
+                <span class="file-name" id="scheduleFilePreview">No files</span>
+            </div>
+            <div class="file-list" id="scheduleFileList"></div>
+        </div>
+
+        <div class="field">
+            <label>Schedule Date and Time</label>
+            <input type="datetime-local" id="scheduleTime">
+        </div>
+
+        <button class="btn btn-secondary" id="scheduleBtn">Schedule Message</button>
+        <div class="result" id="scheduleResult"></div>
+
+        <div class="history-section">
+            <div class="history-header">
+                <span class="title">Scheduled Messages</span>
+                <button class="clear-btn" id="refreshScheduledBtn">Refresh</button>
+            </div>
+            <div class="history-list" id="scheduledList">
+                <div class="history-empty">No scheduled messages</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Tab -->
+    <div class="tab-content" id="tab-history">
+        <div class="history-header">
+            <span class="title">Sent History</span>
+            <button class="clear-btn" id="clearHistoryBtn">Clear All</button>
+        </div>
+        <div class="history-list" id="historyList">
+            <div class="history-empty">No messages sent yet</div>
+        </div>
+        <button class="btn btn-ghost" id="exportHistoryBtn" style="margin-top:10px;">Export History</button>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="messageModal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Full Message</h3>
+        <div class="modal-message" id="modalMessage"></div>
+        <button class="modal-close" onclick="closeModal()">Close</button>
+    </div>
+</div>
+
+<script>
+    var sentHistory = [];
+    var sendFiles = [];
+    var scheduleFiles = [];
+
+    document.querySelectorAll('#tabBar button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('#tabBar button').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            this.classList.add('active');
+            var tab = this.getAttribute('data-tab');
+            var content = document.getElementById('tab-' + tab);
+            if (content) content.classList.add('active');
+            if (tab === 'history') renderHistory();
+            if (tab === 'schedule') loadScheduledJobs();
+        });
+    });
+
+    document.getElementById('sendMediaFile').addEventListener('change', function(e) {
+        sendFiles = Array.from(this.files);
+        var preview = document.getElementById('sendFilePreview');
+        var list = document.getElementById('sendFileList');
+        if (sendFiles.length === 0) {
+            preview.textContent = 'No files';
+            list.textContent = '';
+            return;
+        }
+        preview.textContent = sendFiles.length + ' file(s)';
+        var names = sendFiles.map(function(f) { return f.name; }).join(', ');
+        list.textContent = names;
+    });
+
+    document.getElementById('scheduleMediaFile').addEventListener('change', function(e) {
+        scheduleFiles = Array.from(this.files);
+        var preview = document.getElementById('scheduleFilePreview');
+        var list = document.getElementById('scheduleFileList');
+        if (scheduleFiles.length === 0) {
+            preview.textContent = 'No files';
+            list.textContent = '';
+            return;
+        }
+        preview.textContent = scheduleFiles.length + ' file(s)';
+        var names = scheduleFiles.map(function(f) { return f.name; }).join(', ');
+        list.textContent = names;
+    });
+
+    function showResult(divId, msg, type) {
+        var div = document.getElementById(divId);
+        if (!div) return;
+        div.textContent = msg;
+        div.className = 'result ' + type;
+        div.style.display = 'block';
+        setTimeout(function() { div.style.display = 'none'; }, 6000);
+    }
+
+    function getSendNumbers() {
+        var val = document.getElementById('sendNumbers').value;
+        return val.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+    }
+
+    function getScheduleNumbers() {
+        var val = document.getElementById('scheduleNumbers').value;
+        return val.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+    }
+
+    // Send Now
+    document.getElementById('sendNowBtn').addEventListener('click', async function() {
+        var numbers = getSendNumbers();
+        var msg = document.getElementById('sendMessage').value.trim();
+        var files = sendFiles;
+
+        if (numbers.length === 0) { showResult('sendResult', 'Add at least one number.', 'error'); return; }
+        if (!msg && files.length === 0) { showResult('sendResult', 'Enter a message or attach media.', 'error'); return; }
+
+        showResult('sendResult', 'Sending...', 'loading');
+
+        try {
+            var formData = new FormData();
+            formData.append('numbers', JSON.stringify(numbers));
+            formData.append('message', msg || '');
+            for (var i = 0; i < files.length; i++) {
+                formData.append('media', files[i]);
+            }
+
+            var response = await fetch('/send-bulk', { method: 'POST', body: formData });
+            var data = await response.json();
+
+            var now = new Date();
+            var dateStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            for (var j = 0; j < numbers.length; j++) {
+                sentHistory.push({ number: numbers[j], date: dateStr, message: msg || '(file)' });
+            }
+            saveHistory();
+
+            if (data.sent > 0) {
+                showResult('sendResult', 'Sent ' + data.sent + ' of ' + data.total + '. Failed: ' + data.failed, 'success');
+                document.getElementById('sendNumbers').value = '';
+                document.getElementById('sendMessage').value = '';
+                document.getElementById('sendMediaFile').value = '';
+                document.getElementById('sendFilePreview').textContent = 'No files';
+                document.getElementById('sendFileList').textContent = '';
+                sendFiles = [];
+            } else {
+                showResult('sendResult', 'Failed: ' + data.failed + ' / ' + data.total, 'error');
+            }
+        } catch (err) {
+            showResult('sendResult', 'Network error: ' + err.message, 'error');
+        }
+    });
+
+    // Schedule
+    document.getElementById('scheduleBtn').addEventListener('click', async function() {
+        var numbers = getScheduleNumbers();
+        var msg = document.getElementById('scheduleMessage').value.trim();
+        var time = document.getElementById('scheduleTime').value;
+        var files = scheduleFiles;
+
+        if (numbers.length === 0) { showResult('scheduleResult', 'Add at least one number.', 'error'); return; }
+        if (!msg && files.length === 0) { showResult('scheduleResult', 'Enter a message or attach media.', 'error'); return; }
+        if (!time) { showResult('scheduleResult', 'Select a date and time.', 'error'); return; }
+
+        showResult('scheduleResult', 'Scheduling...', 'loading');
+
+        try {
+            var formData = new FormData();
+            formData.append('numbers', JSON.stringify(numbers));
+            formData.append('message', msg || '');
+            formData.append('scheduledTime', time);
+            for (var i = 0; i < files.length; i++) {
+                formData.append('media', files[i]);
+            }
+
+            var response = await fetch('/schedule', { method: 'POST', body: formData });
+            var data = await response.json();
+            if (data.success) {
+                showResult('scheduleResult', 'Scheduled for ' + new Date(time).toLocaleString() + '.', 'success');
+                document.getElementById('scheduleNumbers').value = '';
+                document.getElementById('scheduleMessage').value = '';
+                document.getElementById('scheduleTime').value = '';
+                document.getElementById('scheduleMediaFile').value = '';
+                document.getElementById('scheduleFilePreview').textContent = 'No files';
+                document.getElementById('scheduleFileList').textContent = '';
+                scheduleFiles = [];
+                loadScheduledJobs();
+            } else {
+                showResult('scheduleResult', 'Error: ' + (data.error || 'Unknown'), 'error');
+            }
+        } catch (err) {
+            showResult('scheduleResult', 'Network error: ' + err.message, 'error');
+        }
+    });
+
+    async function loadScheduledJobs() {
+        try {
+            var res = await fetch('/scheduled');
+            var data = await res.json();
+            var list = document.getElementById('scheduledList');
+            var jobs = data.jobs || [];
+            if (jobs.length === 0) {
+                list.innerHTML = '<div class="history-empty">No scheduled messages</div>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < jobs.length; i++) {
+                var job = jobs[i];
+                var statusClass = job.status === 'pending' ? 'pending' : (job.status === 'completed' ? 'completed' : 'failed');
+                html += '<div class="scheduled-item">';
+                html += '<div class="info"><div>To: ' + job.numbers.length + ' numbers</div>';
+                html += '<div>' + new Date(job.scheduledTime).toLocaleString() + '</div></div>';
+                html += '<span class="status-badge ' + statusClass + '">' + job.status + '</span>';
+                html += '<button class="delete-btn" onclick="deleteScheduledJob(\'' + job.id + '\')">Delete</button>';
+                html += '</div>';
+            }
+            list.innerHTML = html;
+        } catch (e) {}
+    }
+
+    async function deleteScheduledJob(id) {
+        if (!confirm('Delete this scheduled message?')) return;
+        try {
+            await fetch('/scheduled/' + id, { method: 'DELETE' });
+            loadScheduledJobs();
+        } catch (e) {}
+    }
+
+    function loadHistory() {
+        try {
+            var stored = localStorage.getItem('thulasi_sent_history');
+            sentHistory = stored ? JSON.parse(stored) : [];
+        } catch (e) { sentHistory = []; }
+    }
+
+    function saveHistory() {
+        try {
+            localStorage.setItem('thulasi_sent_history', JSON.stringify(sentHistory));
+        } catch (e) {}
+        renderHistory();
+    }
+
+    function renderHistory() {
+        var list = document.getElementById('historyList');
+        if (sentHistory.length === 0) {
+            list.innerHTML = '<div class="history-empty">No messages sent yet</div>';
+            return;
+        }
+        var html = '';
+        var reversed = sentHistory.slice().reverse();
+        var maxShow = Math.min(100, reversed.length);
+        for (var i = 0; i < maxShow; i++) {
+            var entry = reversed[i];
+            var msg = entry.message || '';
+            var shortMsg = msg.length > 60 ? msg.substring(0, 60) + '...' : msg;
+            html += '<div class="history-item">';
+            html += '<div class="top-row">';
+            html += '<span class="num">' + entry.number + '</span>';
+            html += '<span class="date">' + entry.date + '</span>';
+            html += '<button class="resend-btn" onclick="resendNumber(\'' + entry.number + '\')">Resend</button>';
+            html += '</div>';
+            html += '<div class="message-preview">' + shortMsg + '</div>';
+            if (msg.length > 60) {
+                html += '<button class="view-full-btn" onclick="viewFullMessage(\'' + msg.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">View Full</button>';
+            }
+            html += '</div>';
+        }
+        list.innerHTML = html;
+    }
+
+    function viewFullMessage(msg) {
+        document.getElementById('modalMessage').textContent = msg;
+        document.getElementById('modalTitle').textContent = 'Full Message';
+        document.getElementById('messageModal').classList.add('active');
+    }
+
+    function closeModal() {
+        document
