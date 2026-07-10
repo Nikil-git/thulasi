@@ -7,25 +7,6 @@ const path = require('path');
 const puppeteer = require('puppeteer');
 const schedule = require('node-schedule');
 
-// Download Chrome if missing
-async function ensureChrome() {
-    const chromePath = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
-    if (!fs.existsSync(chromePath)) {
-        console.log('Chrome not found, downloading...');
-        try {
-            const browserFetcher = puppeteer.createBrowserFetcher();
-            const revision = await browserFetcher.download('146.0.7680.31', {
-                platform: 'linux'
-            });
-            console.log('Chrome downloaded to:', revision);
-        } catch (err) {
-            console.error('Failed to download Chrome:', err);
-        }
-    } else {
-        console.log('Chrome already exists at:', chromePath);
-    }
-}
-
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -69,50 +50,54 @@ function cleanNumber(raw) {
     return null;
 }
 
-// Function to find Chrome
+// Function to find Chrome in common locations
 function findChrome() {
     const possiblePaths = [
+        '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome', // The version that got installed
         '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome',
         '/usr/bin/google-chrome',
         '/usr/bin/google-chrome-stable',
         '/usr/bin/chromium-browser',
-        '/usr/bin/chromium'
+        '/usr/bin/chromium',
+        '/usr/bin/chrome'
     ];
     
     for (const p of possiblePaths) {
         if (fs.existsSync(p)) {
-            console.log('Found Chrome at:', p);
+            console.log('✅ Found Chrome at:', p);
             return p;
         }
     }
-    console.log('No Chrome found in known paths, will use Puppeteer default');
-    return undefined;
+    console.log('⚠️ No Chrome found in known paths');
+    return null;
 }
 
 // Start the app
 async function startApp() {
-    console.log('Starting application...');
+    console.log('🚀 Starting application...');
     
-    // Try to find Chrome first
-    const chromePath = findChrome();
+    // First try to find Chrome
+    let chromePath = findChrome();
     
+    // If not found, try to download the correct version
     if (!chromePath) {
-        console.log('Chrome not found, attempting to download...');
-        await ensureChrome();
-        // Try to find it again after download
-        const newChromePath = findChrome();
-        if (!newChromePath) {
-            console.warn('Could not find Chrome even after download. Using default.');
+        console.log('📥 Downloading Chrome...');
+        try {
+            // Use the new BrowserFetcher API
+            const browserFetcher = puppeteer.createBrowserFetcher();
+            const revisionInfo = await browserFetcher.download('121.0.6167.85');
+            console.log('✅ Chrome downloaded to:', revisionInfo.executablePath);
+            chromePath = revisionInfo.executablePath;
+        } catch (err) {
+            console.error('❌ Failed to download Chrome:', err.message);
         }
     }
-
-    console.log('Initializing WhatsApp client...');
     
-    const client = new Client({
+    // If we found Chrome, use it. Otherwise let Puppeteer handle it.
+    const config = {
         authStrategy: new LocalAuth({ dataPath: './session' }),
         puppeteer: {
             headless: true,
-            executablePath: findChrome() || undefined,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -121,14 +106,27 @@ async function startApp() {
                 '--disable-accelerated-2d-canvas',
                 '--disable-accelerated-jpeg-decoding',
                 '--disable-accelerated-mjpeg-decode',
-                '--disable-accelerated-video-decode'
+                '--disable-accelerated-video-decode',
+                '--disable-features=IsolateOrigins,site-per-process'
             ]
         }
-    });
+    };
+    
+    // Only set executablePath if we found Chrome
+    if (chromePath) {
+        config.puppeteer.executablePath = chromePath;
+        console.log('🔧 Using Chrome at:', chromePath);
+    } else {
+        console.log('🔧 Letting Puppeteer find Chrome automatically');
+    }
+    
+    console.log('📱 Initializing WhatsApp client...');
+    
+    const client = new Client(config);
 
     client.on('qr', (qr) => {
         lastQR = qr;
-        console.log('QR Code generated. Scan with WhatsApp!');
+        console.log('📱 QR Code generated. Scan with WhatsApp!');
         qrcode.generate(qr, { small: true });
     });
 
@@ -146,10 +144,10 @@ async function startApp() {
     
     client.on('disconnected', (reason) => {
         clientReady = false;
-        console.log('Disconnected:', reason);
-        console.log('Reconnecting in 5s...');
+        console.log('🔌 Disconnected:', reason);
+        console.log('🔄 Reconnecting in 5s...');
         setTimeout(() => {
-            console.log('Attempting to reconnect...');
+            console.log('🔄 Attempting to reconnect...');
             client.initialize();
         }, 5000);
     });
@@ -398,6 +396,6 @@ async function startApp() {
 
 // Start the application
 startApp().catch(err => {
-    console.error('Fatal error:', err);
+    console.error('❌ Fatal error:', err);
     process.exit(1);
 });
