@@ -4,7 +4,6 @@ const qrcode = require('qrcode-terminal');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer');
 const schedule = require('node-schedule');
 
 // Initialize Express app
@@ -50,51 +49,13 @@ function cleanNumber(raw) {
     return null;
 }
 
-// Function to find Chrome in common locations
-function findChrome() {
-    const possiblePaths = [
-        '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome', // The version that got installed
-        '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome',
-        '/usr/bin/google-chrome',
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        '/usr/bin/chrome'
-    ];
-    
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-            console.log('✅ Found Chrome at:', p);
-            return p;
-        }
-    }
-    console.log('⚠️ No Chrome found in known paths');
-    return null;
-}
-
 // Start the app
 async function startApp() {
     console.log('🚀 Starting application...');
-    
-    // First try to find Chrome
-    let chromePath = findChrome();
-    
-    // If not found, try to download the correct version
-    if (!chromePath) {
-        console.log('📥 Downloading Chrome...');
-        try {
-            // Use the new BrowserFetcher API
-            const browserFetcher = puppeteer.createBrowserFetcher();
-            const revisionInfo = await browserFetcher.download('121.0.6167.85');
-            console.log('✅ Chrome downloaded to:', revisionInfo.executablePath);
-            chromePath = revisionInfo.executablePath;
-        } catch (err) {
-            console.error('❌ Failed to download Chrome:', err.message);
-        }
-    }
-    
-    // If we found Chrome, use it. Otherwise let Puppeteer handle it.
-    const config = {
+
+    // SIMPLIFIED CLIENT - Let Puppeteer handle Chrome automatically
+    // Do not specify executablePath
+    const client = new Client({
         authStrategy: new LocalAuth({ dataPath: './session' }),
         puppeteer: {
             headless: true,
@@ -102,27 +63,10 @@ async function startApp() {
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-accelerated-2d-canvas',
-                '--disable-accelerated-jpeg-decoding',
-                '--disable-accelerated-mjpeg-decode',
-                '--disable-accelerated-video-decode',
-                '--disable-features=IsolateOrigins,site-per-process'
+                '--disable-gpu'
             ]
         }
-    };
-    
-    // Only set executablePath if we found Chrome
-    if (chromePath) {
-        config.puppeteer.executablePath = chromePath;
-        console.log('🔧 Using Chrome at:', chromePath);
-    } else {
-        console.log('🔧 Letting Puppeteer find Chrome automatically');
-    }
-    
-    console.log('📱 Initializing WhatsApp client...');
-    
-    const client = new Client(config);
+    });
 
     client.on('qr', (qr) => {
         lastQR = qr;
@@ -154,8 +98,7 @@ async function startApp() {
 
     await client.initialize();
 
-    // ----- ROUTES -----
-    
+    // ----- ROUTES (Keep all your existing routes) -----
     app.get('/', (req, res) => {
         res.json({ 
             status: 'WhatsApp Bot Running',
