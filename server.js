@@ -5,6 +5,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const schedule = require('node-schedule');
+const puppeteer = require('puppeteer');
 
 // Initialize Express app
 const app = express();
@@ -49,37 +50,62 @@ function cleanNumber(raw) {
     return null;
 }
 
+// Function to download Chrome at runtime using the correct API
+async function downloadChromeAtRuntime() {
+    console.log('📥 Downloading Chrome at runtime...');
+    try {
+        // Use the correct BrowserFetcher API
+        const browserFetcher = puppeteer.createBrowserFetcher();
+        const revisionInfo = await browserFetcher.download('121.0.6167.85');
+        console.log('✅ Chrome downloaded to:', revisionInfo.executablePath);
+        return revisionInfo.executablePath;
+    } catch (error) {
+        console.error('❌ Failed to download Chrome:', error.message);
+        return null;
+    }
+}
+
 // Start the app
 async function startApp() {
     console.log('🚀 Starting application...');
 
-    // CRITICAL FIX: Use system Chrome on Render
-    // Render has Chrome pre-installed at this location
-    const CHROME_PATH = '/usr/bin/google-chrome-stable';
-    
-    console.log('🔍 Looking for Chrome at:', CHROME_PATH);
-    const chromeExists = fs.existsSync(CHROME_PATH);
-    console.log('Chrome exists?', chromeExists);
-    
-    // If system Chrome doesn't exist, try the Puppeteer cache
-    let executablePath = chromeExists ? CHROME_PATH : undefined;
-    
-    if (!chromeExists) {
-        const altPath = '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome';
-        console.log('Trying alternative path:', altPath);
-        if (fs.existsSync(altPath)) {
-            executablePath = altPath;
-            console.log('Found Chrome at alternative path');
-        } else {
-            console.log('⚠️ No Chrome found. Letting Puppeteer attempt to find it.');
+    // Try to find Chrome in various locations
+    let chromePath = null;
+    const possiblePaths = [
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome'
+    ];
+
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            chromePath = p;
+            console.log('✅ Found Chrome at:', p);
+            break;
         }
     }
+
+    // If Chrome wasn't found, download it at runtime
+    if (!chromePath) {
+        console.log('⚠️ Chrome not found in standard locations.');
+        chromePath = await downloadChromeAtRuntime();
+    }
+
+    // If we still don't have Chrome, we can't continue
+    if (!chromePath) {
+        console.error('❌ Could not find or download Chrome. Exiting.');
+        process.exit(1);
+    }
+
+    console.log('🔧 Using Chrome at:', chromePath);
 
     const client = new Client({
         authStrategy: new LocalAuth({ dataPath: './session' }),
         puppeteer: {
             headless: true,
-            executablePath: executablePath,
+            executablePath: chromePath,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
