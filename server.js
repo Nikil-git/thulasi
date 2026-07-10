@@ -3,8 +3,30 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const multer = require('multer');
 const fs = require('fs');
-const schedule = require('node-schedule');
+const path = require('path');
+const puppeteer = require('puppeteer'); // ✅ ADD THIS IMPORT
+const schedule = require('node-schedule'); // ✅ ADD THIS IMPORT
 
+// Download Chrome if missing
+async function ensureChrome() {
+    const chromePath = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
+    if (!fs.existsSync(chromePath)) {
+        console.log('Chrome not found, downloading...');
+        try {
+            const browserFetcher = puppeteer.createBrowserFetcher();
+            const revision = await browserFetcher.download('146.0.7680.31', {
+                platform: 'linux'
+            });
+            console.log('Chrome downloaded to:', revision);
+        } catch (err) {
+            console.error('Failed to download Chrome:', err);
+        }
+    } else {
+        console.log('Chrome already exists at:', chromePath);
+    }
+}
+
+// Initialize Express app first
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -23,13 +45,17 @@ function loadScheduledJobs() {
             const data = fs.readFileSync('scheduled.json', 'utf8');
             scheduledJobs = JSON.parse(data);
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error('Error loading scheduled jobs:', e);
+    }
 }
 
 function saveScheduledJobs() {
     try {
         fs.writeFileSync('scheduled.json', JSON.stringify(scheduledJobs, null, 2));
-    } catch (e) {}
+    } catch (e) {
+        console.error('Error saving scheduled jobs:', e);
+    }
 }
 
 function cleanNumber(raw) {
@@ -43,219 +69,246 @@ function cleanNumber(raw) {
     return null;
 }
 
-// IMPORTANT: Use the exact path from the build log
-// The build installs Chrome at this location
-const CHROME_PATH = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
+// Ensure Chrome exists before initializing client
+(async () => {
+    await ensureChrome();
+    initializeClient();
+})();
 
-console.log('Looking for Chrome at:', CHROME_PATH);
-console.log('Chrome exists?', fs.existsSync(CHROME_PATH));
+function initializeClient() {
+    // IMPORTANT: Use the exact path from the build log
+    const CHROME_PATH = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
+    
+    console.log('Looking for Chrome at:', CHROME_PATH);
+    console.log('Chrome exists?', fs.existsSync(CHROME_PATH));
 
-const client = new Client({
-    authStrategy: new LocalAuth({ dataPath: './session' }),
-    puppeteer: {
-        headless: true,
-        executablePath: CHROME_PATH,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu'
-        ]
-    }
-});
-
-client.on('qr', (qr) => {
-    lastQR = qr;
-    console.log('QR Code generated.');
-    qrcode.generate(qr, { small: true });
-});
-
-client.on('ready', () => {
-    clientReady = true;
-    lastQR = null;
-    console.log('WhatsApp client ready!');
-    loadScheduledJobs();
-});
-
-client.on('auth_failure', () => console.error('Auth failed'));
-client.on('disconnected', () => {
-    clientReady = false;
-    setTimeout(() => client.initialize(), 5000);
-});
-
-client.initialize();
-
-app.get('/status', (req, res) => {
-    res.json({ ready: clientReady, qr: lastQR });
-});
-
-app.get('/scheduled', (req, res) => {
-    res.json({ jobs: scheduledJobs });
-});
-
-app.delete('/scheduled/:id', (req, res) => {
-    const id = req.params.id;
-    const index = scheduledJobs.findIndex(j => j.id === id);
-    if (index === -1) return res.status(404).json({ error: 'Job not found' });
-    scheduledJobs.splice(index, 1);
-    saveScheduledJobs();
-    res.json({ success: true });
-});
-
-app.post('/send-bulk', upload.array('media', 10), async (req, res) => {
-    try {
-        let numbers, message;
-        let mediaFiles = [];
-        if (req.files && req.files.length > 0) {
-            mediaFiles = req.files.map(f => f.path);
-            numbers = JSON.parse(req.body.numbers);
-            message = req.body.message || '';
+    // Try alternate path if the first one doesn't exist
+    let executablePath = CHROME_PATH;
+    if (!fs.existsSync(CHROME_PATH)) {
+        // Try the default Puppeteer installation path
+        const altPath = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
+        if (fs.existsSync(altPath)) {
+            executablePath = altPath;
         } else {
-            numbers = req.body.numbers;
-            message = req.body.message;
+            // Let Puppeteer find it automatically
+            console.log('Chrome not found at specified path, will use default');
+            executablePath = undefined;
         }
-        if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
-            return res.status(400).json({ error: 'No numbers provided' });
+    }
+
+    const client = new Client({
+        authStrategy: new LocalAuth({ dataPath: './session' }),
+        puppeteer: {
+            headless: true,
+            executablePath: executablePath,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu'
+            ]
         }
-        if (!message && mediaFiles.length === 0) {
-            return res.status(400).json({ error: 'Missing message or media' });
-        }
-        if (!clientReady) {
-            return res.status(503).json({ error: 'WhatsApp not ready' });
-        }
-        const validNumbers = [];
-        const invalidNumbers = [];
-        for (const raw of numbers) {
-            const cleaned = cleanNumber(raw);
-            if (cleaned) validNumbers.push(cleaned + '@c.us');
-            else invalidNumbers.push(raw);
-        }
-        if (validNumbers.length === 0) {
-            return res.status(400).json({ error: 'No valid numbers', invalid: invalidNumbers });
-        }
-        let sent = 0, failed = 0, idx = 0;
-        const errors = [];
-        const mediaObjs = [];
-        for (const path of mediaFiles) {
-            if (fs.existsSync(path)) {
-                try {
-                    mediaObjs.push(MessageMedia.fromFilePath(path));
-                } catch (err) {}
+    });
+
+    client.on('qr', (qr) => {
+        lastQR = qr;
+        console.log('QR Code generated.');
+        qrcode.generate(qr, { small: true });
+    });
+
+    client.on('ready', () => {
+        clientReady = true;
+        lastQR = null;
+        console.log('WhatsApp client ready!');
+        loadScheduledJobs();
+    });
+
+    client.on('auth_failure', () => console.error('Auth failed'));
+    client.on('disconnected', () => {
+        clientReady = false;
+        console.log('Disconnected, reconnecting in 5s...');
+        setTimeout(() => client.initialize(), 5000);
+    });
+
+    client.initialize();
+
+    // ----- ROUTES -----
+    
+    app.get('/status', (req, res) => {
+        res.json({ ready: clientReady, qr: lastQR });
+    });
+
+    app.get('/scheduled', (req, res) => {
+        res.json({ jobs: scheduledJobs });
+    });
+
+    app.delete('/scheduled/:id', (req, res) => {
+        const id = req.params.id;
+        const index = scheduledJobs.findIndex(j => j.id === id);
+        if (index === -1) return res.status(404).json({ error: 'Job not found' });
+        scheduledJobs.splice(index, 1);
+        saveScheduledJobs();
+        res.json({ success: true });
+    });
+
+    app.post('/send-bulk', upload.array('media', 10), async (req, res) => {
+        try {
+            let numbers, message;
+            let mediaFiles = [];
+            if (req.files && req.files.length > 0) {
+                mediaFiles = req.files.map(f => f.path);
+                numbers = JSON.parse(req.body.numbers);
+                message = req.body.message || '';
+            } else {
+                numbers = req.body.numbers;
+                message = req.body.message;
             }
-        }
-        async function worker() {
-            while (idx < validNumbers.length) {
-                const i = idx++;
-                const chatId = validNumbers[i];
-                try {
-                    if (mediaObjs.length > 0) {
-                        for (const media of mediaObjs) {
-                            await client.sendMessage(chatId, media, { caption: message || '' });
-                        }
-                    } else {
-                        await client.sendMessage(chatId, message);
+            if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
+                return res.status(400).json({ error: 'No numbers provided' });
+            }
+            if (!message && mediaFiles.length === 0) {
+                return res.status(400).json({ error: 'Missing message or media' });
+            }
+            if (!clientReady) {
+                return res.status(503).json({ error: 'WhatsApp not ready' });
+            }
+            const validNumbers = [];
+            const invalidNumbers = [];
+            for (const raw of numbers) {
+                const cleaned = cleanNumber(raw);
+                if (cleaned) validNumbers.push(cleaned + '@c.us');
+                else invalidNumbers.push(raw);
+            }
+            if (validNumbers.length === 0) {
+                return res.status(400).json({ error: 'No valid numbers', invalid: invalidNumbers });
+            }
+            let sent = 0, failed = 0, idx = 0;
+            const errors = [];
+            const mediaObjs = [];
+            for (const filePath of mediaFiles) {
+                if (fs.existsSync(filePath)) {
+                    try {
+                        mediaObjs.push(MessageMedia.fromFilePath(filePath));
+                    } catch (err) {
+                        console.error('Error loading media:', err);
                     }
-                    sent++;
-                } catch (err) {
-                    failed++;
-                    errors.push({ number: chatId, error: err.message });
                 }
             }
-        }
-        const concurrency = req.body.concurrency || 20;
-        const workers = Array(Math.min(concurrency, validNumbers.length)).fill().map(() => worker());
-        await Promise.all(workers);
-        for (const f of mediaFiles) if (fs.existsSync(f)) fs.unlinkSync(f);
-        res.json({
-            total: validNumbers.length,
-            sent, failed,
-            invalid: invalidNumbers,
-            errors: errors.slice(0, 20)
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/schedule', upload.array('media', 10), async (req, res) => {
-    try {
-        let numbers, message, scheduledTime;
-        let mediaFiles = [];
-        if (req.files && req.files.length > 0) {
-            mediaFiles = req.files.map(f => f.path);
-            numbers = JSON.parse(req.body.numbers);
-            message = req.body.message || '';
-            scheduledTime = req.body.scheduledTime;
-        } else {
-            numbers = req.body.numbers;
-            message = req.body.message;
-            scheduledTime = req.body.scheduledTime;
-        }
-        if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
-            return res.status(400).json({ error: 'Missing numbers' });
-        }
-        if (!message && mediaFiles.length === 0) {
-            return res.status(400).json({ error: 'Missing message or media' });
-        }
-        if (!scheduledTime) {
-            return res.status(400).json({ error: 'Missing scheduled time' });
-        }
-        const validNumbers = [];
-        for (const raw of numbers) {
-            const cleaned = cleanNumber(raw);
-            if (cleaned) validNumbers.push(cleaned);
-        }
-        if (validNumbers.length === 0) {
-            return res.status(400).json({ error: 'No valid numbers' });
-        }
-        const job = {
-            id: Date.now().toString(),
-            numbers: validNumbers,
-            message: message || '',
-            mediaFiles: mediaFiles || [],
-            scheduledTime: scheduledTime,
-            status: 'pending',
-            createdAt: new Date().toISOString()
-        };
-        scheduledJobs.push(job);
-        saveScheduledJobs();
-        const date = new Date(scheduledTime);
-        if (date > new Date()) {
-            schedule.scheduleJob(date, async function() {
-                console.log('Executing scheduled job:', job.id);
-                if (!clientReady) return;
-                let sent = 0, failed = 0;
-                for (const number of job.numbers) {
+            async function worker() {
+                while (idx < validNumbers.length) {
+                    const i = idx++;
+                    const chatId = validNumbers[i];
                     try {
-                        const chatId = number + '@c.us';
-                        if (job.mediaFiles && job.mediaFiles.length > 0) {
-                            for (const mediaPath of job.mediaFiles) {
-                                if (fs.existsSync(mediaPath)) {
-                                    const media = MessageMedia.fromFilePath(mediaPath);
-                                    await client.sendMessage(chatId, media, { caption: job.message || '' });
-                                }
+                        if (mediaObjs.length > 0) {
+                            for (const media of mediaObjs) {
+                                await client.sendMessage(chatId, media, { caption: message || '' });
                             }
                         } else {
-                            await client.sendMessage(chatId, job.message);
+                            await client.sendMessage(chatId, message);
                         }
                         sent++;
                     } catch (err) {
                         failed++;
+                        errors.push({ number: chatId, error: err.message });
                     }
                 }
-                job.status = 'completed';
-                job.sent = sent;
-                job.failed = failed;
-                job.completedAt = new Date().toISOString();
-                saveScheduledJobs();
+            }
+            const concurrency = req.body.concurrency || 20;
+            const workers = Array(Math.min(concurrency, validNumbers.length)).fill().map(() => worker());
+            await Promise.all(workers);
+            for (const f of mediaFiles) if (fs.existsSync(f)) fs.unlinkSync(f);
+            res.json({
+                total: validNumbers.length,
+                sent, failed,
+                invalid: invalidNumbers,
+                errors: errors.slice(0, 20)
             });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
         }
-        res.json({ success: true, jobId: job.id });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+    });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log('Server running on port', PORT);
-});
+    app.post('/schedule', upload.array('media', 10), async (req, res) => {
+        try {
+            let numbers, message, scheduledTime;
+            let mediaFiles = [];
+            if (req.files && req.files.length > 0) {
+                mediaFiles = req.files.map(f => f.path);
+                numbers = JSON.parse(req.body.numbers);
+                message = req.body.message || '';
+                scheduledTime = req.body.scheduledTime;
+            } else {
+                numbers = req.body.numbers;
+                message = req.body.message;
+                scheduledTime = req.body.scheduledTime;
+            }
+            if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
+                return res.status(400).json({ error: 'Missing numbers' });
+            }
+            if (!message && mediaFiles.length === 0) {
+                return res.status(400).json({ error: 'Missing message or media' });
+            }
+            if (!scheduledTime) {
+                return res.status(400).json({ error: 'Missing scheduled time' });
+            }
+            const validNumbers = [];
+            for (const raw of numbers) {
+                const cleaned = cleanNumber(raw);
+                if (cleaned) validNumbers.push(cleaned);
+            }
+            if (validNumbers.length === 0) {
+                return res.status(400).json({ error: 'No valid numbers' });
+            }
+            const job = {
+                id: Date.now().toString(),
+                numbers: validNumbers,
+                message: message || '',
+                mediaFiles: mediaFiles || [],
+                scheduledTime: scheduledTime,
+                status: 'pending',
+                createdAt: new Date().toISOString()
+            };
+            scheduledJobs.push(job);
+            saveScheduledJobs();
+            const date = new Date(scheduledTime);
+            if (date > new Date()) {
+                schedule.scheduleJob(date, async function() {
+                    console.log('Executing scheduled job:', job.id);
+                    if (!clientReady) return;
+                    let sent = 0, failed = 0;
+                    for (const number of job.numbers) {
+                        try {
+                            const chatId = number + '@c.us';
+                            if (job.mediaFiles && job.mediaFiles.length > 0) {
+                                for (const mediaPath of job.mediaFiles) {
+                                    if (fs.existsSync(mediaPath)) {
+                                        const media = MessageMedia.fromFilePath(mediaPath);
+                                        await client.sendMessage(chatId, media, { caption: job.message || '' });
+                                    }
+                                }
+                            } else {
+                                await client.sendMessage(chatId, job.message);
+                            }
+                            sent++;
+                        } catch (err) {
+                            failed++;
+                            console.error('Failed to send to', number, err.message);
+                        }
+                    }
+                    job.status = 'completed';
+                    job.sent = sent;
+                    job.failed = failed;
+                    job.completedAt = new Date().toISOString();
+                    saveScheduledJobs();
+                });
+            }
+            res.json({ success: true, jobId: job.id });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log('Server running on port', PORT);
+    });
+}
