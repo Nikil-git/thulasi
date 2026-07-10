@@ -4,8 +4,6 @@ const qrcode = require('qrcode-terminal');
 const multer = require('multer');
 const fs = require('fs');
 const schedule = require('node-schedule');
-const path = require('path');
-const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,46 +43,18 @@ function cleanNumber(raw) {
     return null;
 }
 
-// Find Chrome path dynamically
-function findChromePath() {
-    const possiblePaths = [
-        // Render's cache path
-        '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome',
-        // Use the PATH
-        '/usr/bin/chromium-browser',
-        '/usr/bin/chromium',
-        '/usr/bin/google-chrome',
-        '/usr/bin/google-chrome-stable',
-        // Fallback: use which command
-        'chromium-browser',
-        'chromium',
-        'google-chrome',
-        'google-chrome-stable'
-    ];
+// IMPORTANT: Use the exact path from the build log
+// The build installs Chrome at this location
+const CHROME_PATH = '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome';
 
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-            return p;
-        }
-        // Try with which command
-        try {
-            const which = require('child_process').execSync(`which ${p}`, { stdio: 'pipe' }).toString().trim();
-            if (which && fs.existsSync(which)) {
-                return which;
-            }
-        } catch (e) {}
-    }
-    return null;
-}
-
-const chromePath = findChromePath();
-console.log('Chrome path:', chromePath);
+console.log('Looking for Chrome at:', CHROME_PATH);
+console.log('Chrome exists?', fs.existsSync(CHROME_PATH));
 
 const client = new Client({
     authStrategy: new LocalAuth({ dataPath: './session' }),
     puppeteer: {
         headless: true,
-        executablePath: chromePath || undefined,
+        executablePath: CHROME_PATH,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
