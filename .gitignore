@@ -1,0 +1,5 @@
+node_modules/
+session/
+uploads/
+scheduled.json
+.env
