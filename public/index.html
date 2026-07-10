@@ -622,4 +622,51 @@
     }
 
     function closeModal() {
-        document
+        document.getElementById('messageModal').classList.remove('active');
+    }
+
+    document.getElementById('messageModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    function resendNumber(number) {
+        document.getElementById('sendNumbers').value = number;
+        document.querySelectorAll('#tabBar button').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+        document.querySelector('[data-tab="send"]').classList.add('active');
+        document.getElementById('tab-send').classList.add('active');
+        document.getElementById('sendMessage').focus();
+    }
+
+    document.getElementById('clearHistoryBtn').addEventListener('click', function() {
+        if (confirm('Clear all sent history?')) {
+            sentHistory = [];
+            saveHistory();
+            renderHistory();
+        }
+    });
+
+    document.getElementById('exportHistoryBtn').addEventListener('click', function() {
+        if (sentHistory.length === 0) {
+            showResult('sendResult', 'No history to export.', 'error');
+            return;
+        }
+        var text = 'Number,Date,Message\n';
+        for (var i = 0; i < sentHistory.length; i++) {
+            text += sentHistory[i].number + ',' + sentHistory[i].date + ',' + (sentHistory[i].message || '') + '\n';
+        }
+        var blob = new Blob([text], { type: 'text/csv' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'whatsapp_history.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        showResult('sendResult', 'History exported as CSV.', 'success');
+    });
+
+    loadHistory();
+    document.getElementById('refreshScheduledBtn').addEventListener('click', loadScheduledJobs);
+</script>
+</body>
+</html>
