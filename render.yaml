@@ -3,5 +3,5 @@ services:
     name: thulasi-wa
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install
     startCommand: node server.js
