@@ -3,7 +3,8 @@ services:
     name: thulasi-wa
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: |
+      apt-get update && apt-get install -y chromium && npm install
     startCommand: node server.js
     envVars:
       - key: PUPPETEER_EXECUTABLE_PATH
