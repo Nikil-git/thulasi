@@ -53,18 +53,33 @@ function cleanNumber(raw) {
 async function startApp() {
     console.log('🚀 Starting application...');
 
-    // CRITICAL FIX: Point to the Chrome version that was actually installed
-    const CHROME_PATH = '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome';
+    // CRITICAL FIX: Use system Chrome on Render
+    // Render has Chrome pre-installed at this location
+    const CHROME_PATH = '/usr/bin/google-chrome-stable';
     
     console.log('🔍 Looking for Chrome at:', CHROME_PATH);
     const chromeExists = fs.existsSync(CHROME_PATH);
     console.log('Chrome exists?', chromeExists);
+    
+    // If system Chrome doesn't exist, try the Puppeteer cache
+    let executablePath = chromeExists ? CHROME_PATH : undefined;
+    
+    if (!chromeExists) {
+        const altPath = '/opt/render/.cache/puppeteer/chrome/linux-121.0.6167.85/chrome-linux64/chrome';
+        console.log('Trying alternative path:', altPath);
+        if (fs.existsSync(altPath)) {
+            executablePath = altPath;
+            console.log('Found Chrome at alternative path');
+        } else {
+            console.log('⚠️ No Chrome found. Letting Puppeteer attempt to find it.');
+        }
+    }
 
     const client = new Client({
         authStrategy: new LocalAuth({ dataPath: './session' }),
         puppeteer: {
             headless: true,
-            executablePath: chromeExists ? CHROME_PATH : undefined,
+            executablePath: executablePath,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -108,7 +123,7 @@ async function startApp() {
 
     await client.initialize();
 
-    // ----- ROUTES (Keep all your existing routes) -----
+    // ----- ROUTES -----
     app.get('/', (req, res) => {
         res.json({ 
             status: 'WhatsApp Bot Running',
